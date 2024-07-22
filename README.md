@@ -17,8 +17,8 @@ Collection of notebooks to understand world of Retrieval Augmented Generation (R
 
 07_Advanced_RAG_Query_Expansion.ipynb: Query expansion technique to increase the chance of getting user question answered 
 
-08_RAG_using_OpenSource_LLMs.ipynb: Building RAG pipelines using open source LLMs
+08_RAG_using_OpenSource_LLMs.ipynb: Building RAG pipelines using open source LLMs [WIP]
 
 09_RAG_Evaluation.ipynb: Let's understand how to evaluate the RAG pipeline using various cool metrics 
 
-10_Agentic_RAG.ipynb : Empowering your your RAG pipeline using Autonomous AI Agents 
+10_Agentic_RAG.ipynb : Empowering your your RAG pipeline using Autonomous AI Agents [WIP]
