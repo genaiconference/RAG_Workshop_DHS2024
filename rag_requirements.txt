@@ -1,0 +1,13 @@
+faiss-cpu==1.7.4
+langchain==0.0.309
+chromadb==0.4.15
+xlsxwriter==1.4.3
+xlrd==1.2.0
+openpyxl==3.1.2
+sentence_transformers==2.2.2
+pypdf==3.16.2
+tiktoken==0.5.1
+openai==0.28.1
+umap-learn==0.5.5
+lark==1.1.9
+rank_bm25==0.2.2
