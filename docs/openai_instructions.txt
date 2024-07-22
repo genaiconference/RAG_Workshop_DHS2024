@@ -1,0 +1,5 @@
+Steps to create a new open ai account and get the API key
+-----------------------------------------------------------
+1) Sign up and create an account by visting https://platform.openai.com/signup
+2) Visit https://platform.openai.com/api-keys to create a new API key
+
