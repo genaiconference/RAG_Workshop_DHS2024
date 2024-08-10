@@ -2,7 +2,7 @@ import pickle
 from langchain_chroma import Chroma
 from langchain.agents import AgentType
 from langchain.chat_models import ChatOpenAI
-from langchain.storage import InMemoryByteStore
+from langchain_core.stores import InMemoryByteStore
 from langchain.retrievers.multi_vector import MultiVectorRetriever
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.agents import Tool, AgentExecutor, create_openai_tools_agent
