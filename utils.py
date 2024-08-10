@@ -1,88 +1,146 @@
-import pickle
-from langchain_chroma import Chroma
-from langchain.agents import AgentType
-from langchain.chat_models import ChatOpenAI
-from langchain.storage import InMemoryByteStore
-from langchain.retrievers.multi_vector import MultiVectorRetriever
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain.agents import Tool, AgentExecutor, create_openai_tools_agent
-from langchain_core.prompts import PromptTemplate
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder, HumanMessagePromptTemplate, SystemMessagePromptTemplate
+from langchain.chains import ConversationalRetrievalChain
+from IPython.display import Markdown
+from langchain.memory import ConversationBufferMemory
+from typing import Dict, Any
+from langchain.prompts import ChatPromptTemplate
 
+class CustomConversationBufferMemory(ConversationBufferMemory):
+    def save_context(self, inputs: Dict[str, Any], outputs: Dict[str, str]) -> None:
+        return super(CustomConversationBufferMemory, self).save_context(inputs,{'response': outputs['answer']})
 
-def dump_pickle_file(retriever, filename: str):
+# define memory object
+memory = CustomConversationBufferMemory(memory_key="chat_history", return_messages=True)
+
+template = """You are an assistant for question-answering tasks. 
+Use the following pieces of retrieved context to answer the question. 
+Keep the answer straight to the point.
+Avoid using generic phrases like "Provide context" or "as per context.
+Question: {question} 
+Context: {context} 
+Answer:
+"""
+RAG_prompt = ChatPromptTemplate.from_template(template)
+
+def pretty_print_result(query, _llm, retriever):
     """
-    Serialize and save the given data to a file using Pickle.
-    Args:
-        data: The data to be pickled.
-        filename (str): The name of the file where the pickled data will be saved.
-    Returns:
-    A pickle file with object saved in it
+    Custom function to print clean output
     """
-    with open(filename, 'wb') as handle:
-        pickle.dump(retriever, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    chain = ConversationalRetrievalChain.from_llm(llm=_llm, 
+                                           combine_docs_chain_kwargs={"prompt": RAG_prompt}, 
+                                          retriever=retriever, 
+                                           memory=memory, 
+                                           return_source_documents=True)
+    try:
+        result = chain({"question": query})
+        print("Answer: " + result["answer"])
+        print("=============================================================================================================")
+
+    except Exception as e:
+        print(e)
+        pass
+    print("No of documents retrieved" + str(len(result['source_documents'])))
+    print(f"\n{'-' * 100}\n".join([f"Document {i+1}:\n\n" + d.page_content +"\n\n" + str(d.metadata) for i, d in enumerate(result['source_documents'])]))
+    return
 
 
-def load_pickle_file(filename: str):
+def get_answer(query, _llm, retriever):
     """
-    De-Serialize file using Pickle.
-    Args:
-        filename (str): The name of the file where the pickled data will be saved.
-    Returns:
-    Pickle Object
+    given query, llm, prompt, return answwer and relevant source documents
+    
     """
     
-    with open(filename, "rb") as input_file:
-        pickle_object = pickle.load(input_file)
-    return pickle_object
-
-
-
-def create_MVR(filename, _embeddings, persist_directory_name, vectorstore_exists=True, k=7):
-    docs_path = "/content/drive/MyDrive/AgenticAI_Repo/docs/"
-    vector_store_path = "/content/drive/MyDrive/AgenticAI_Repo/vector_store/vector_store/"
-    file_docs = load_pickle_file(docs_path + filename)
-    docs = file_docs['parent_docs']
-    doc_ids = file_docs['doc_ids']
-    id_key = 'doc_id'
+    chain = ConversationalRetrievalChain.from_llm(llm=_llm, 
+                                           combine_docs_chain_kwargs={"prompt": RAG_prompt}, 
+                                          retriever=retriever, 
+                                           memory=memory, 
+                                           return_source_documents=True)
+    try:
+        result = chain({"question": query})
+    except:
+        pass
     
-    if vectorstore_exists:
-        vectorstore = Chroma(persist_directory=vector_store_path + persist_directory_name, embedding_function=_embeddings)
+    return result['answer'], result['source_documents']
+
+
+# Helper function for printing docs
+def pretty_print_docs(docs):
+    print(
+        f"\n{'-' * 100}\n".join(
+            [f"Document {i+1}:\n\n" + d.page_content + "\n\n" + str(d.metadata) for i, d in enumerate(docs)]
+        )
+    )
+
+import chromadb
+
+from langchain.text_splitter import RecursiveCharacterTextSplitter, SentenceTransformersTokenTextSplitter
+import numpy as np
+from pypdf import PdfReader
+from tqdm import tqdm
+
+
+def _read_pdf(filename):
+    reader = PdfReader(filename)
+    
+    pdf_texts = [p.extract_text().strip() for p in reader.pages]
+
+    # Filter the empty strings
+    pdf_texts = [text for text in pdf_texts if text]
+    return pdf_texts
+
+
+def _chunk_texts(texts):
+    character_splitter = RecursiveCharacterTextSplitter(
+        separators=["\n\n", "\n", ". ", " ", ""],
+        chunk_size=1000,
+        chunk_overlap=0
+    )
+    character_split_texts = character_splitter.split_text('\n\n'.join(texts))
+
+    token_splitter = SentenceTransformersTokenTextSplitter(chunk_overlap=0, tokens_per_chunk=256)
+
+    token_split_texts = []
+    for text in character_split_texts:
+        token_split_texts += token_splitter.split_text(text)
+
+    return token_split_texts
+
+
+def load_chroma(filename, collection_name, embedding_function):
+    texts = _read_pdf(filename)
+    chunks = _chunk_texts(texts)
+
+    chroma_cliet = chromadb.Client()
+    chroma_collection = chroma_cliet.create_collection(name=collection_name, embedding_function=embedding_function)
+
+    ids = [str(i) for i in range(len(chunks))]
+
+    chroma_collection.add(ids=ids, documents=chunks)
+
+    return chroma_collection
+
+def word_wrap(string, n_chars=72):
+    # Wrap a string at the next space after n_chars
+    if len(string) < n_chars:
+        return string
     else:
-        vectorstore = Chroma.from_documents(docs, _embeddings, persist_directory=vector_store_path + persist_directory_name)
-
-    # The storage layer for the parent documents
-    store = InMemoryByteStore()
-
-    retriever = MultiVectorRetriever(
-        vectorstore=vectorstore,
-        byte_store=store,
-        id_key=id_key, search_kwargs={"k": k})
-
-    retriever.docstore.mset(list(zip(doc_ids, docs)))
-    return retriever
+        return string[:n_chars].rsplit(' ', 1)[0] + '\n' + word_wrap(string[len(string[:n_chars].rsplit(' ', 1)[0])+1:], n_chars)
 
 
-def create_chat_agent(llm: ChatOpenAI, tools: list, system_prompt: str, verbose=False):
-    """Helper function for creating agent executor"""
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", system_prompt),
-        MessagesPlaceholder(variable_name="conversation_history", optional=True),
-        HumanMessagePromptTemplate(prompt=PromptTemplate(input_variables=['input'], template='{input}')),
-        MessagesPlaceholder(variable_name="agent_scratchpad"),
-    ])
-    agent = create_openai_tools_agent(llm, tools, prompt)
-    executor = AgentExecutor(agent=agent, tools=tools, verbose=verbose)
-    return executor
+   
+def project_embeddings(embeddings, umap_transform):
+    umap_embeddings = np.empty((len(embeddings),2))
+    for i, embedding in enumerate(tqdm(embeddings)): 
+        umap_embeddings[i] = umap_transform.transform([embedding])
+    return umap_embeddings
+
+from langchain.document_loaders import PyPDFLoader
+
+def load_data(data_path):
+
+  loader1 = PyPDFLoader(file_path=data_path+'/Apple_2022.pdf')
+  documents1 = loader1.load()
+  loader2 = PyPDFLoader(file_path=data_path+'/Apple_2023.pdf')
+  documents2 = loader2.load()
 
 
-def create_qa_agent(llm: ChatOpenAI, tools: list, system_prompt: str, verbose=False):
-    """Helper function for creating agent executor"""
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", system_prompt),
-        HumanMessagePromptTemplate(prompt=PromptTemplate(input_variables=['input'], template='{input}')),
-        MessagesPlaceholder(variable_name="agent_scratchpad"),
-    ])
-    agent = create_openai_tools_agent(llm, tools, prompt)
-    executor = AgentExecutor(agent=agent, tools=tools, verbose=verbose)
-    return executor
+
