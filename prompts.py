@@ -27,6 +27,7 @@ META_RESPONSE_PROMPT_DETAILED = """You are an expert at analyzing a user questio
 
                             Return "Yes" if the following conditions are met: 
                             - If the question deals with financial topics or terms.
+                            - If the user asks anything related to leave policies and any information regarding leaves
                             - If the user asks a question about a data source, return "Yes", irrespective of whether you think it would contain the required information or not.  
                             - If the question asks about financial aspects of drug development, such as R&D costs, capital budgeting for clinical trials, or the financial reporting of such activities.  
                             - If the question uses somewhat financial terms like book, report, account for, etc.  
